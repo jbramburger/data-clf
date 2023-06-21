@@ -1,0 +1,3 @@
+MORE INFO COMING SOON...
+
+Code to accompany the letter Synthesizing Control Laws from Data using Sum-of-Squares Optimization by Jason J. Bramburger, Steven Dahdah, and James R. Forbes. 
