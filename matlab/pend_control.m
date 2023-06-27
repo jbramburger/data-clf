@@ -38,6 +38,8 @@ clear all;
 clc;
 close all;
 
+rng(0118999);
+
 %% Method Parameters 
 % maxPhi = max degree of x1 and x3 in phi dictionary of obserables
 % maxPsi = max degree of x1 and x3 in psi dictionary of obserables
