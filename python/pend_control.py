@@ -2,6 +2,7 @@
 
 import numpy as np
 import scipy.integrate
+import scipy.linalg
 import SumOfSquares
 import sympy
 from matplotlib import pyplot as plt
@@ -45,6 +46,7 @@ def main():
         ])
         return x_dot
 
+    # Generate training data
     X_lst = []
     Y_lst = []
     U_lst = []
@@ -80,15 +82,25 @@ def main():
     Y = np.vstack(Y_lst)
     U = np.vstack(U_lst)
 
-    fig, ax = plt.subplots(3, 1)
-    ax[0].plot(X[:, 0])
-    ax[0].plot(X[:, 1])
-    ax[0].plot(X[:, 2])
-    ax[1].plot(Y[:, 0])
-    ax[1].plot(Y[:, 1])
-    ax[1].plot(Y[:, 2])
-    ax[2].plot(U)
-    plt.show()
+    # Create Psi matrix
+    pow_psi = []
+    for p in SumOfSquares.basis_inhom(X.shape[1], max_psi):
+        if p[1] < 2:
+            pow_psi.append(p)
+    Psi_no_u = np.vstack([np.prod(X**p, axis=1) for p in pow_psi]).T
+    Psi = np.hstack([Psi_no_u, U * Psi_no_u])
+    # Create Phi matrix
+    pow_phi = []
+    for p in SumOfSquares.basis_inhom(X.shape[1], max_phi):
+        if p[1] < 2:
+            pow_phi.append(p)
+    Phi = np.vstack([np.prod(Y**p, axis=1) for p in pow_phi]).T
+    # Solve for Koopman matrix
+    K = scipy.linalg.lstsq(Psi, Phi)[0].T
+
+    np.set_printoptions(linewidth=200)
+    print(K.shape)
+    print(K)
 
 
 if __name__ == '__main__':
