@@ -98,9 +98,26 @@ def main():
     # Solve for Koopman matrix
     K = scipy.linalg.lstsq(Psi, Phi)[0].T
 
-    np.set_printoptions(linewidth=200)
-    print(K.shape)
-    print(K)
+    # Symbolic variables
+    x1, x2, x3 = sympy.symbols('x_1, x_2, x_3')
+    x = np.array([[x1], [x2], [x3]])
+    w = np.vstack([np.prod(x.T**p, axis=1) for p in pow_psi])
+    z = np.vstack([np.prod(x.T**p, axis=1) for p in pow_phi])
+
+    # Controller
+    u = SumOfSquares.poly_variable('u', x, deg_u)
+
+    # Lyapunov function coefficients
+    c = np.zeros_like(z)
+    c[0, 0] = 1 + alpha  # 1
+    c[3, 0] = -1  # x_1
+    c[4, 0] = 0.5  # x_3^2
+    c[15, 0] = -alpha  # x_1^3
+
+    # Lie derivative approximation
+    # L = (K - np.eye())
+
+    print(c.T @ z)
 
 
 if __name__ == '__main__':
