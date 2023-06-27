@@ -1,0 +1,7 @@
+numpy
+scipy
+matplotlib
+sympy
+SumOfSquares
+picos
+Mosek
