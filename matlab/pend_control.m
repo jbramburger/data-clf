@@ -34,6 +34,10 @@
 %
 % -------------------------------------------------------------------------
 
+clear all;
+clc;
+close all;
+
 %% Method Parameters 
 % maxPhi = max degree of x1 and x3 in phi dictionary of obserables
 % maxPsi = max degree of x1 and x3 in psi dictionary of obserables
@@ -147,7 +151,7 @@ c(11) = -al;
 L = (K - eye( size(K) ) ) /dt;
 thresh = 0.05; % use to stamp out noise
 L(abs(L) <= thresh) = 0;
-Lie = c.'*(L(:,1:m)*w + L(:,m+1:end)*w*u);
+Lie = c.'*(L(:,1:q)*w + L(:,q+1:end)*w*u);
 
 %% Sum-of-squares optimization to find controller 
 
