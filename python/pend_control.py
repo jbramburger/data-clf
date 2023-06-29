@@ -1,6 +1,7 @@
 """Design a data-driven controller for a pendulum via the Lie derivative."""
 
 import numpy as np
+import picos
 import scipy.integrate
 import scipy.linalg
 import SumOfSquares
@@ -11,7 +12,7 @@ from matplotlib import pyplot as plt
 def main():
     """Design a data-driven controller for a pendulum."""
     # Set random seed
-    rng = np.random.default_rng(1234)
+    rng = np.random.default_rng(9234)
 
     # Max degree of x1 and x3 in phi dictionary of obserables
     max_phi = 3
@@ -105,7 +106,9 @@ def main():
     z = np.vstack([np.prod(x.T**p, axis=1) for p in pow_phi])
 
     # Controller
-    u = SumOfSquares.poly_variable('u', x, deg_u)
+    ub = np.array(SumOfSquares.Basis.from_degree(X.shape[1], max_psi).to_sym([x1, x2, x3])).reshape(-1, 1)
+    uc = np.array(sympy.symbols([f'u_{i}' for i in range(ub.shape[0])])).reshape(-1, 1)
+    u = (uc.T @ ub).reshape((-1, ))
 
     # Lyapunov function coefficients
     c = np.zeros_like(z)
@@ -115,9 +118,30 @@ def main():
     c[15, 0] = -alpha  # x_1^3
 
     # Lie derivative approximation
-    # L = (K - np.eye())
+    L = (K - np.eye(*K.shape)) / dt
+    thresh = 0.05  # use to stamp out noise
+    L[np.abs(L) <= thresh] = 0
 
-    print(c.T @ z)
+    # S-procedure
+    s1 = SumOfSquares.poly_variable('s1', [x1, x2, x3], deg_u)
+    s2 = SumOfSquares.poly_variable('s2', [x1, x2, x3], deg_u)
+
+    obj = (
+        -c.T @ (L[:, :w.shape[0]] @ w + L[:, w.shape[0]:] @ w * u)  # Lie der.
+        + (1 - x[0, 0]**2 - x[1, 0]**2) * s1  # Trigononmetric constraint
+        - (eta**2 - x[1, 0]**2) * s2  # Domain
+    )[0, 0]
+
+    problem = SumOfSquares.SOSProblem()
+    problem.add_sos_constraint(obj, [x1, x2, x3])
+    problem.add_sos_constraint(s2, [x1, x2, x3])
+    ucv = picos.block([problem.sym_to_var(uc[i, 0]) for i in range(uc.shape[0])])
+    problem.set_objective('min', picos.Norm(ucv, p=1))
+    problem.solve(solver='mosek')
+
+    ucv = np.array(ucv)
+    print(ucv[np.abs(ucv) >= 1e-4])
+    print(ub[np.abs(ucv) >= 1e-4])
 
 
 if __name__ == '__main__':
