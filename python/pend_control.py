@@ -1,4 +1,27 @@
-"""Design a data-driven controller for a pendulum via the Lie derivative."""
+"""Design a data-driven controller for a pendulum via the Lie derivative.
+
+This script accompanies the letter "Synthesizing Control Laws from Data using
+Sum-of-Squares Optimization" by Jason J. Bramburger, Steven Dahdah, and
+James R. Forbes.
+
+The goal of this script is to use data-driven approximations of the Lie
+derivative to identify optimal controllers from data. This script uses the
+inverted pendulum on a cart model::
+
+    theta'' = sin(theta) - eps * theta' - cos(theta) * u
+
+where ``eps > 0`` is the friction coefficient and u is the control input. Here
+the control is given by the acceleration of the cart.
+
+This script identifies a state-dependent feedback controller that stabilizes
+the pendulum in the upright position. The control law is identified through
+polynomial optimization with a control Lyapunov function.
+
+Application of the method transforms the state variables theta and theta'
+to the 3D observables: ``x_1 = cos(theta)``, ``x_2 = sin(theta)``, and
+``x_3 = theta'``. We then discover the controller as a polynomial function of
+(x_1, x_2, x_3)``.
+"""
 
 import numpy as np
 import picos
