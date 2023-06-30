@@ -14,9 +14,9 @@ def main():
     # Set random seed
     rng = np.random.default_rng(9234)
 
-    # Max degree of x1 and x3 in phi dictionary of obserables
+    # Max degree of x1 and x3 in phi dictionary of observables
     max_phi = 3
-    # Max degree of x1 and x3 in psi dictionary of obserables
+    # Max degree of x1 and x3 in psi dictionary of observables
     max_psi = 4
     # Degree of the controller u as a function of x variables
     deg_u = 4
@@ -38,13 +38,18 @@ def main():
         u = a * np.sin(t + b)
         return u
 
-    def pendulum_ivp(t, x, a, b):
-        """Compute state derivative of pendulum with sinusoidal forcing."""
-        u = sinusoidal_forcing(t, a, b)
+    def pendulum_ivp(t, x, u):
+        """Compute state derivative of pendulum."""
         x_dot = np.array([
             x[1],
             np.sin(x[0]) - 0.1 * x[1] - np.cos(x[0]) * u,
         ])
+        return x_dot
+
+    def pendulum_sine_ivp(t, x, a, b):
+        """Compute state derivative of pendulum with sinusoidal forcing."""
+        u = sinusoidal_forcing(t, a, b)
+        x_dot = pendulum_ivp(t, x, u)
         return x_dot
 
     # Generate training data
@@ -61,7 +66,7 @@ def main():
         b_i = rng.uniform(low=-np.pi, high=np.pi)
         # Numerical integration
         sol = scipy.integrate.solve_ivp(
-            pendulum_ivp,
+            pendulum_sine_ivp,
             t_span,
             y0=x0_i,
             method='RK45',
@@ -90,6 +95,7 @@ def main():
             pow_psi.append(p)
     Psi_no_u = np.vstack([np.prod(X**p, axis=1) for p in pow_psi]).T
     Psi = np.hstack([Psi_no_u, U * Psi_no_u])
+
     # Create Phi matrix
     pow_phi = []
     for p in SumOfSquares.basis_inhom(X.shape[1], max_phi):
@@ -105,10 +111,21 @@ def main():
     w = np.vstack([np.prod(x.T**p, axis=1) for p in pow_psi])
     z = np.vstack([np.prod(x.T**p, axis=1) for p in pow_phi])
 
-    # Controller
-    ub = np.array(SumOfSquares.Basis.from_degree(X.shape[1], max_psi).to_sym([x1, x2, x3])).reshape(-1, 1)
-    uc = np.array(sympy.symbols([f'u_{i}' for i in range(ub.shape[0])])).reshape(-1, 1)
-    u = (uc.T @ ub).reshape((-1, ))
+    # Controller basis
+    ub = np.reshape(
+        SumOfSquares.Basis.from_degree(
+            X.shape[1],
+            max_psi,
+        ).to_sym([x1, x2, x3]),
+        (-1, 1),
+    )
+    # Controller coefficients
+    uc = np.reshape(
+        sympy.symbols([f'u_{i}' for i in range(ub.shape[0])]),
+        (-1, 1),
+    )
+    # Controller symbolic expression
+    u = (uc.T @ ub).item()
 
     # Lyapunov function coefficients
     c = np.zeros_like(z)
@@ -116,32 +133,87 @@ def main():
     c[3, 0] = -1  # x_1
     c[4, 0] = 0.5  # x_3^2
     c[15, 0] = -alpha  # x_1^3
+    lyap = (c.T @ z).item()
 
     # Lie derivative approximation
     L = (K - np.eye(*K.shape)) / dt
-    thresh = 0.05  # use to stamp out noise
+    thresh = 0.05  # Use to stamp out noise
     L[np.abs(L) <= thresh] = 0
 
-    # S-procedure
+    # S-procedure polynomials
     s1 = SumOfSquares.poly_variable('s1', [x1, x2, x3], deg_u)
     s2 = SumOfSquares.poly_variable('s2', [x1, x2, x3], deg_u)
-
-    obj = (
-        -c.T @ (L[:, :w.shape[0]] @ w + L[:, w.shape[0]:] @ w * u)  # Lie der.
+    # Main constraint
+    q = w.shape[0]
+    constr = (
+        -c.T @ (L[:, :q] @ w + L[:, q:] @ w * u)  # Lie derivative
         + (1 - x[0, 0]**2 - x[1, 0]**2) * s1  # Trigononmetric constraint
         - (eta**2 - x[1, 0]**2) * s2  # Domain
-    )[0, 0]
+    ).item()
 
-    problem = SumOfSquares.SOSProblem()
-    problem.add_sos_constraint(obj, [x1, x2, x3])
-    problem.add_sos_constraint(s2, [x1, x2, x3])
-    ucv = picos.block([problem.sym_to_var(uc[i, 0]) for i in range(uc.shape[0])])
-    problem.set_objective('min', picos.Norm(ucv, p=1))
-    problem.solve(solver='mosek')
+    # SOS optimization problem
+    prob = SumOfSquares.SOSProblem()
+    prob.add_sos_constraint(constr, [x1, x2, x3])
+    prob.add_sos_constraint(s2, [x1, x2, x3])
+    # Controller coefficients as PICOS variables (instead of symbolic)
+    ucv = picos.block([prob.sym_to_var(uc[i, 0]) for i in range(uc.shape[0])])
+    prob.set_objective('min', picos.Norm(ucv, p=1))
+    prob.solve(solver='mosek')
 
+    # Get solution
     ucv = np.array(ucv)
-    print(ucv[np.abs(ucv) >= 1e-4])
-    print(ub[np.abs(ucv) >= 1e-4])
+    u = SumOfSquares.round_sympy_expr((ucv.T @ ub).item(), precision=4)
+    print(f'Identified control input: u(x) = {u}')
+
+    # Convert controller and Lyapunov functions to numpy
+    u_numpy = sympy.lambdify([np.ravel(x)], u, 'numpy')
+    lyap_numpy = sympy.lambdify([np.ravel(x)], lyap, 'numpy')
+
+    def pendulum_controlled_ivp(t, x):
+        """Compute state derivative of pendulum with SOS controller."""
+        u = u_numpy(np.array([np.cos(x[0]), np.sin(x[0]), x[1]]))
+        x_dot = pendulum_ivp(t, x, u)
+        return x_dot
+
+    # Numerically integrate trajectory with controller
+    sol = scipy.integrate.solve_ivp(
+        pendulum_controlled_ivp,
+        t_span,
+        y0=np.array([3, 0]),
+        method='RK45',
+        t_eval=t,
+    )
+
+    # Evaluate Lyapunov function and input on controlledtrajectory
+    x_cos_sin = np.vstack([
+        np.cos(sol.y[0, :]),
+        np.sin(sol.y[0, :]),
+        sol.y[1, :],
+    ])
+    Vk = lyap_numpy(x_cos_sin)
+    uk = u_numpy(x_cos_sin)
+
+    # Plot pendulum trajectory
+    fig, ax = plt.subplots()
+    ax.plot(t, sol.y[0, :], label=r'$\theta(t)$')
+    ax.plot(t, sol.y[1, :], '--', label=r'$\dot{\theta}(t)$')
+    ax.set_xlim(0, 8)
+    ax.set_ylim(-3, 3)
+    ax.grid(ls='--')
+    ax.set_xlabel('t')
+    ax.legend(loc='upper right')
+
+    # Plot Lyapunov function and input
+    fig, ax = plt.subplots()
+    ax.plot(t, Vk / 10, label=r'$0.1 \cdot V(\theta(t), \dot{\theta}(t))$')
+    ax.plot(t, uk, '--', label=r'$u(t)$')
+    ax.set_xlim(0, 8)
+    ax.set_ylim(-10, 20)
+    ax.grid(ls='--')
+    ax.set_xlabel('t')
+    ax.legend(loc='upper right')
+
+    plt.show()
 
 
 if __name__ == '__main__':
