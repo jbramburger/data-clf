@@ -1,36 +1,36 @@
 % -------------------------------------------------------------------------
 %
-% This script accompanies the letter "Synthesizing Control Laws from Data 
-%       using Sum-of-Squares Optimization" 
+% This script accompanies the letter "Synthesizing Control Laws from Data
+%       using Sum-of-Squares Optimization"
 %
 %       authors: Jason J. Bramburger, Steven Dahdah, and James R. Forbes
 %
 % The goal of this script is to use data-driven approximations of the Lie
 % derivative to identify optimal controllers from data. This script uses
 % the inverted pendulum on a cart model
-% 
+%
 %         theta'' = sin(theta) - eps*theta' - cos(theta)u
 %
-% where eps > 0 is the friction coefficient and u is the control input. 
-% Here the control is given by the acceleration of the cart. 
+% where eps > 0 is the friction coefficient and u is the control input.
+% Here the control is given by the acceleration of the cart.
 %
-% This script identifies a state-dependent feedback controller 
+% This script identifies a state-dependent feedback controller
 % u = u_*(theta,theta') that stabilizes the pendulum in the upright
 % position, i.e. at the equilibrium (theta,theta') = (0,0). The control law
 % u_* is identified through polynomial optimization with a control Lyapunov
-% function. 
+% function.
 %
 % Application of the method transforms the state variables theta and theta'
 % to the 3D observables: x_1 = cos(theta), x_2 = sin(theta), and x_3 =
 % theta'. We then discover u_* as a polynomial function of (x_1,x_2,x_3).
-% 
+%
 % To run this notebook one requires paths to the freely available software
 % packages YALMIP and MOSEK. YALMIP can be downloaded at:
 %           https://yalmip.github.io/download/
 % and MOSEK can be downloaded at:
 %           https://www.mosek.com/downloads/
 %
-% Written by J. Bramburger 
+% Written by J. Bramburger
 %
 % -------------------------------------------------------------------------
 
@@ -40,7 +40,7 @@ close all;
 
 rng(0118999);
 
-%% Method Parameters 
+%% Method Parameters
 % maxPhi = max degree of x1 and x3 in phi dictionary of obserables
 % maxPsi = max degree of x1 and x3 in psi dictionary of obserables
 % degU = degree of the controller u as a function of x variables
@@ -72,20 +72,20 @@ for ind = 1:numICs
 
     % Randomized initial conditions
     x0 = [2*pi*rand - pi; 4*rand - 2];
-    
+
     % ODE45 to simulate ODE
     a = 2*rand-1;
     b = 2*pi*rand - pi;
     rhs = @(t,x) syst(t,x,a,b);
     [t, sol] = ode45(rhs,t,x0);
-    
+
     sol = [cos(sol(:,1)), sin(sol(:,1)), sol(:,2)];
-    
+
     % Aggregate data
     xdat = [xdat, sol(1:end-1,:)'];
     ydat = [ydat, sol(2:end,:)'];
-    
-    % Control 
+
+    % Control
     uxdat = [uxdat; a*sin(t(1:end-1)+b)];
     uydat = [uydat; a*sin(t(2:end)+b)];
 end
@@ -101,11 +101,11 @@ pow = monpowers(3,maxPsi);
 q = size(pow,1); % number of nontrivial monomials in Q
 Psi = [];
 for i = 1:q
-   
-    zx = xdat.^pow(i,:); 
-    
+
+    zx = xdat.^pow(i,:);
+
     if pow(i,2) >= 2 % no polynomials with deg(x_2) > 2
-        Psi(i,:) = zeros(1,length(zx));    
+        Psi(i,:) = zeros(1,length(zx));
     else
         Psi(i,:) = prod(zx,2);
     end
@@ -119,10 +119,10 @@ pow = monpowers(3,maxPhi);
 p = size(pow,1); % number of nontrivial monomials in P
 Phi = [];
 for i = 1:p
-    
+
     zy = ydat.^pow(i,:);
-   
-    if pow(i,2) >= 2 % no polynomials with deg(x_2) > 2  
+
+    if pow(i,2) >= 2 % no polynomials with deg(x_2) > 2
         Phi(i,:) = zeros(1,length(zy));
     else
         Phi(i,:) = prod(zy,2)';
@@ -155,15 +155,15 @@ thresh = 0.05; % use to stamp out noise
 L(abs(L) <= thresh) = 0;
 Lie = c.'*(L(:,1:q)*w + L(:,q+1:end)*w*u);
 
-%% Sum-of-squares optimization to find controller 
+%% Sum-of-squares optimization to find controller
 
 % S procedure
 [s1,cs1] = polynomial(x,degU,1);
 [s2,cs2] = polynomial(x,degU,1);
 
 % Lyapunov function used:
-%      V = [0.5*th'^2 + 1 - cos(th)] + al*(1 - cos(th)^3) 
-obj = sos( -Lie + (1 - x(1)^2 - x(2)^2)*s1 - (eta^2 - x(2)^2)*s2); 
+%      V = [0.5*th'^2 + 1 - cos(th)] + al*(1 - cos(th)^3)
+obj = sos( -Lie + (1 - x(1)^2 - x(2)^2)*s1 - (eta^2 - x(2)^2)*s2);
 obj = [obj; sos(s2)];
 
 % SOS solver (solver = MOSEK)
@@ -213,7 +213,7 @@ axis tight
 % Determine controller as time goes on
 uc = [];
 for j = 1:length(t)
-   uc(j,1) = cuv.'*prod([cos(xc(j,1)) sin(xc(j,1)) xc(j,2)].^upow,2);  
+   uc(j,1) = cuv.'*prod([cos(xc(j,1)) sin(xc(j,1)) xc(j,2)].^upow,2);
 end
 
 figure(2)
@@ -229,9 +229,7 @@ axis tight
 
 %% Controlled ODE system
 function dxc = systc(t,x,cu,upow)
-
     dxc(1) = x(2);
-    dxc(2) = -0.1*x(2) + sin(x(1)) - cos(x(1))*cu.'*prod([cos(x(1)) sin(x(1)) x(2)].^upow,2);  
-    
+    dxc(2) = -0.1*x(2) + sin(x(1)) - cos(x(1))*cu.'*prod([cos(x(1)) sin(x(1)) x(2)].^upow,2);
     dxc = dxc';
 end
