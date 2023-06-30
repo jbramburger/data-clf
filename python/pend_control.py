@@ -183,15 +183,12 @@ def main():
         method='RK45',
         t_eval=t,
     )
-
-    # Evaluate Lyapunov function and input on controlledtrajectory
+    # Substitute in cosine and sine so we can evaluate V an u on the trajectory
     x_cos_sin = np.vstack([
         np.cos(sol.y[0, :]),
         np.sin(sol.y[0, :]),
         sol.y[1, :],
     ])
-    Vk = lyap_numpy(x_cos_sin)
-    uk = u_numpy(x_cos_sin)
 
     # Plot pendulum trajectory
     fig, ax = plt.subplots()
@@ -205,8 +202,12 @@ def main():
 
     # Plot Lyapunov function and input
     fig, ax = plt.subplots()
-    ax.plot(t, Vk / 10, label=r'$0.1 \cdot V(\theta(t), \dot{\theta}(t))$')
-    ax.plot(t, uk, '--', label=r'$u(t)$')
+    ax.plot(
+        t,
+        lyap_numpy(x_cos_sin) / 10,
+        label=r'$0.1 \cdot V(\theta(t), \dot{\theta}(t))$',
+    )
+    ax.plot(t, u_numpy(x_cos_sin), '--', label=r'$u(t)$')
     ax.set_xlim(0, 8)
     ax.set_ylim(-10, 20)
     ax.grid(ls='--')
