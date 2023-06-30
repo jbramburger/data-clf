@@ -25,7 +25,7 @@ controller to stabilize an inverted pendulum on a cart.
 
 ## Setup
 
-## MATLAB
+### MATLAB
 
 `pend_control.m` requires YALMIP and MOSEK to run. Both packages can be
 download for free at:
@@ -33,7 +33,7 @@ download for free at:
 - YALMIP: https://yalmip.github.io/download/
 - MOSEK: https://www.mosek.com/downloads/
 
-## Python
+### Python
 
 To use `pend_control.py`, install the requirements in a virtual environment
 using:
@@ -42,7 +42,7 @@ using:
 (venv) $ pip install -r ./python/requirements.txt
 ```
 
-## MOSEK
+### MOSEK
 
 The MOSEK solver is required for both the MATLAB and Python scripts. Personal
 academic licenses are available
